@@ -8,26 +8,49 @@ using Windows.ApplicationModel;
 
 namespace Win8Toolkit
 {
-    [Cmdlet(VerbsCommon.Get, "AppsFromAppxPackage")]
+    [Cmdlet(VerbsCommon.Get, "WindowsStoreApps")]
     public class AppEnumerate : PSCmdlet
     {
         private PackageManager pm = new PackageManager();
+
         [Parameter(Mandatory = false, Position = 0, ValueFromPipeline = true)]
         [ValidateNotNullOrEmpty]
         [ConvertPackageToString]
-        public String PackageFullName { get; set; }
+        public String PackageFamilyName { get; set; }
+
+        [Parameter(Mandatory = false)]
+        [ValidateNotNullOrEmpty]
+        public String User { get; set; }
+
+        [Parameter(Mandatory = false)]
+        public bool AllUsers { get; set; }
  
         protected override void ProcessRecord()
         {
             IEnumerable<Package> packages;
-            if (this.PackageFullName == null)
+            if (AllUsers)
             {
-                packages = pm.FindPackagesForUser("");
+                if (this.PackageFamilyName == null)
+                {
+                    packages = pm.FindPackages();
+                }
+                else
+                {
+                    packages = pm.FindPackages(this.PackageFamilyName);
+                }
             }
             else
             {
-                packages = pm.FindPackagesForUser("", this.PackageFullName);
+                if (this.PackageFamilyName == null)
+                {
+                    packages = pm.FindPackagesForUser(User ?? "");
+                }
+                else
+                {
+                    packages = pm.FindPackagesForUser(User ?? "", this.PackageFamilyName);
+                }
             }
+
             foreach (var package in packages)
             {
                 String path = package.InstalledLocation.Path + @"\AppxManifest.xml";
@@ -39,8 +62,8 @@ namespace Win8Toolkit
                 {
                     XElement visualElements = node.Descendants(xmlns + "VisualElements").First();
                     WriteObject(new WindowsStoreApplication(
+                        package.Id.FamilyName,
                         node.Attribute("Id").Value,
-                        package.Id.FullName,
                         visualElements.Attribute("DisplayName").Value));
                 }
             }
@@ -50,22 +73,71 @@ namespace Win8Toolkit
     public class WindowsStoreApplication
     {
         public WindowsStoreApplication(
-            String packageName,
+            String packageFamilyName,
             String name,
             String displayName)
         {
-            _packageName = packageName;
-            _name = name;
-            _displayName = displayName;
+            PackageFamilyName = packageFamilyName;
+            Name = name;
+            DisplayName = displayName;
+            AppUserModelId = packageFamilyName + "!" + name;
         }
 
-        private String _packageName;
-        public String PackageName { get { return _packageName; } }
-        private String _name;
-        public String Name { get { return _name; } }
-        private String _displayName;
-        public String DisplayName { get { return _displayName; } }
+        private IntPtr GetWindowForApp()
+        {
+            return Win32.FindWindow("Windows.UI.Core.CoreWindow", DisplayName);
+        }
 
+        public String PackageFamilyName { get; private set; }
+        public String Name { get; private set; }
+        public String DisplayName { get; private set; }
+        public String AppUserModelId { get; private set; }
 
+        /// <summary>
+        /// Launches an application using activation, providing blank arguments
+        /// <returns>Process ID of launched app</returns>
+        /// </summary>
+        public UInt32 Launch()
+        {
+            return Launch("");
+        }
+
+        /// <summary>
+        /// Launches an application using activation and the specified arguments
+        /// <param name="arguments">Arguments to pass to the app</param>
+        /// <returns>Process ID of launched app</returns>
+        /// </summary>
+        public UInt32 Launch(String arguments)
+        {
+            IApplicationActivationManager aam = (IApplicationActivationManager)new ApplicationActivationManager();
+            UInt32 pid = 0;
+            aam.ActivateApplication(AppUserModelId, arguments, ACTIVATEOPTIONS.AO_NONE, out pid);
+            return pid;
+        }
+
+        /// <summary>
+        /// Tells if the application has some UI running
+        /// </summary>
+        public bool Running
+        {
+            get
+            {
+                return GetWindowForApp() != IntPtr.Zero;
+            }
+        }
+
+        /// <summary>
+        /// Attempts to switch to the app if it is running
+        /// </summary>
+        /// <returns>Tells if switching to the app was successful</returns>
+        public bool SwitchTo()
+        {
+            IntPtr hwnd = GetWindowForApp();
+            if (hwnd != IntPtr.Zero)
+            {
+                return Win32.SetForegroundWindow(hwnd);
+            }
+            return false;
+        }
     }
 }

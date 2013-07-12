@@ -31,12 +31,14 @@ namespace Win8Toolkit
             [In, MarshalAs(UnmanagedType.LPWStr)] String appUserModelId,
             [In, MarshalAs(UnmanagedType.LPWStr)] String arguments,
             [In] ACTIVATEOPTIONS options,
-            [Out] UInt32 processId);
-        UInt32 ActivateForFile(
+            [Out] out UInt32 processId);
+        // This is not supported right now
+        UInt32 ActivateForFile( // This is not supported right now
             [In, MarshalAs(UnmanagedType.LPWStr)] String appUserModelId,
             [In] IntPtr itemArray, //[In] IShellItemArray itemArray,
             [In, MarshalAs(UnmanagedType.LPWStr)] String verb,
             [Out] UInt32 processId);
+        // This is not supported right now
         UInt32 ActivateForProtocol(
             [In, MarshalAs(UnmanagedType.LPWStr)] String appUserModelId,
             [In] IntPtr itemArray, //[In] IShellItemArray itemArray,
@@ -73,5 +75,22 @@ namespace Win8Toolkit
 
     class Win32
     {
+        public const int MAX_PATH = 260;
+        public const long APPMODEL_ERROR_NO_APPLICATION = 15703;
+
+        [DllImport("Kernel32.dll")]
+        public static extern long GetApplicationUserModelId(
+            [In] IntPtr hProcess,
+            [In, Out] ref int applicationUserModelIdLength, // [In, Out] ref UInt32 applicationUserModelIdLength,
+            [Out, MarshalAs(UnmanagedType.LPWStr)] System.Text.StringBuilder applicationUserModelId); // [Out, MarshalAs(UnmanagedType.LPWStr)] String applicationUserModelId);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        public static extern IntPtr FindWindow(
+            string lpClassName, 
+            string lpWindowName);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool SetForegroundWindow(IntPtr hWnd);
     }
 }
