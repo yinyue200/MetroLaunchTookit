@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 
 namespace Win8Toolkit
 {
-    [ComImport(), Guid("45BA127D-10A8-46EA-8AB7-56EA9078943C")]
+    [ComImport, Guid("45BA127D-10A8-46EA-8AB7-56EA9078943C")]
     class ApplicationActivationManager
     {
     }
@@ -72,6 +72,76 @@ namespace Win8Toolkit
         [MethodImpl ( MethodImplOptions.InternalCall, MethodCodeType = MethodCodeType.Runtime )]
         void EnumItems ( [MarshalAs ( UnmanagedType.Interface )] out IntPtr ppenumShellItems );
     }*/
+
+    [ComImport, Guid("B1AEC16F-2383-4852-B0E9-8F0B1DC66B4D")]
+    class PackageDebugSettings
+    {
+    }
+
+
+    /*
+    Renamed from Shobjidl.h:     
+
+    enum PACKAGE_EXECUTION_STATE
+    {
+        PES_UNKNOWN	= 0,
+        PES_RUNNING	= 1,
+        PES_SUSPENDING	= 2,
+        PES_SUSPENDED	= 3,
+        PES_TERMINATED	= 4
+    }
+    */
+
+    public enum PackageExecutionState
+    {
+        Unknown = 0,
+        Running = 1,
+        Suspending = 2,
+        Suspended = 3,
+        Terminated = 4
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct GUID
+    {
+       public int a;
+       public short b;
+       public short c;
+       [MarshalAs(UnmanagedType.ByValArray, SizeConst=8)]
+       public byte[] d;
+    }
+
+    [ComImport, Guid("F27C3930-8029-4AD1-94E3-3DBA417810C1"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IPackageDebugSettings
+    {
+        void EnableDebugging(
+            [In] String packageFullName, 
+            [In, Optional] String debuggerCommandLine, 
+            [In, Optional] String[] environment);
+        void DisableDebugging([In] String packageFullName);
+        void Suspend([In] String packageFullName);
+        void Resume([In] String packageFullName);
+        void TerminateAllProcesses([In] String packageFullName);
+        void SetTargetSessionId([In] UIntPtr sessionId);
+        void EnumerateBackgroundTasks(
+            [In] String packageFullName, 
+            [Out] out UIntPtr taskCount, 
+            [Out] out GUID[] taskIds,
+            [Out] out String[] taskNames
+            );
+
+        void ActivateBackgroundTask([In] ref GUID taskId);
+        void StartServicing([In] String packageFullName);
+        void StopServicing([In] String packageFullName);
+        void StartSessionRedirection([In] String packageFullName, [In] UIntPtr sessionId);
+        void StopSessionRedirection([In] String  packageFullName);
+        void GetPackageExecutionState([In] String packageFullName, [Out] out PackageExecutionState packageExecutionState);
+
+        void RegisterForPackageStateChanges([In] String packageFullName, [In] IntPtr pPackageExecutionStateChangeNotification, [Out] out UInt32 pdwCookie);
+        void UnregisterForPackageStateChanges([In] UInt32 dwCookie);
+    }
+
+
 
     class Win32
     {

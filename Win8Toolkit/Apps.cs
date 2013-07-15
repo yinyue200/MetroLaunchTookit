@@ -63,6 +63,7 @@ namespace Win8Toolkit
                     XElement visualElements = node.Descendants(xmlns + "VisualElements").First();
                     WriteObject(new WindowsStoreApplication(
                         package.Id.FamilyName,
+                        package.Id.FullName,
                         node.Attribute("Id").Value,
                         visualElements.Attribute("DisplayName").Value));
                 }
@@ -72,15 +73,24 @@ namespace Win8Toolkit
 
     public class WindowsStoreApplication
     {
+        private static IApplicationActivationManager aam;
+        private static IPackageDebugSettings pds;
+
         public WindowsStoreApplication(
             String packageFamilyName,
+            String packageFullName,
             String name,
             String displayName)
         {
             PackageFamilyName = packageFamilyName;
+            PackageFullName = packageFullName;
             Name = name;
             DisplayName = displayName;
             AppUserModelId = packageFamilyName + "!" + name;
+
+            // Note that this is not thread safe
+            aam = (IApplicationActivationManager)new ApplicationActivationManager();
+            pds = (IPackageDebugSettings)new PackageDebugSettings();
         }
 
         private IntPtr GetWindowForApp()
@@ -88,6 +98,7 @@ namespace Win8Toolkit
             return Win32.FindWindow("Windows.UI.Core.CoreWindow", DisplayName);
         }
 
+        public String PackageFullName { get; private set; }
         public String PackageFamilyName { get; private set; }
         public String Name { get; private set; }
         public String DisplayName { get; private set; }
@@ -109,7 +120,6 @@ namespace Win8Toolkit
         /// </summary>
         public UInt32 Launch(String arguments)
         {
-            IApplicationActivationManager aam = (IApplicationActivationManager)new ApplicationActivationManager();
             UInt32 pid = 0;
             aam.ActivateApplication(AppUserModelId, arguments, ACTIVATEOPTIONS.AO_NONE, out pid);
             return pid;
@@ -118,12 +128,43 @@ namespace Win8Toolkit
         /// <summary>
         /// Tells if the application has some UI running
         /// </summary>
-        public bool Running
+        public PackageExecutionState ExecutionState
         {
             get
             {
-                return GetWindowForApp() != IntPtr.Zero;
+                PackageExecutionState pes;
+                pds.GetPackageExecutionState(PackageFullName, out pes);
+
+                // PackageDebugSettings gives the state for the whole package. It's possible another app in
+                // the package is running, so check if there's a window for the app
+                if ((pes != PackageExecutionState.Terminated || pes != PackageExecutionState.Unknown) && GetWindowForApp() == IntPtr.Zero)
+                {
+                    pes = PackageExecutionState.Terminated;
+                }
+
+                return pes;
             }
+        }
+
+        /// <summary>
+        ///  Tell the system to suspend the app
+        /// </summary>
+        public void Suspend()
+        {
+            pds.Suspend(PackageFullName);
+        }
+
+        public void Resume()
+        {
+            pds.Resume(PackageFullName);
+        }
+
+        /// <summary>
+        ///  Tell the system to terminate this app and all apps in the package
+        /// </summary>
+        public void Terminate()
+        {
+            pds.TerminateAllProcesses(PackageFullName);
         }
 
         /// <summary>
