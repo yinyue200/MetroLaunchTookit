@@ -1,10 +1,12 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Linq;
 using System.Management.Automation;
 using System.Xml.Linq;
 using Windows.Management.Deployment;
 using System.Collections.Generic;
 using Windows.ApplicationModel;
+using System.Text;
 
 namespace Win8Toolkit
 {
@@ -95,7 +97,33 @@ namespace Win8Toolkit
 
         private IntPtr GetWindowForApp()
         {
-            return Win32.FindWindow("Windows.UI.Core.CoreWindow", DisplayName);
+            IntPtr lastWindow = IntPtr.Zero;
+            while ((lastWindow = Win32.FindWindowEx(IntPtr.Zero, lastWindow, "Windows.UI.Core.CoreWindow", IntPtr.Zero)) != IntPtr.Zero)
+            {
+                int pid = 1;
+                if (Win32.GetWindowThreadProcessId(lastWindow, out pid) != 0)
+                {
+                    Process p = Process.GetProcessById(pid);
+                    IntPtr handle;
+                    try
+                    {
+                       handle = p.Handle;
+                    }
+                    catch (Exception)
+                    {
+                        continue;
+                    }
+
+                    StringBuilder sb = new StringBuilder(Win32.MAX_PATH);
+                    int length = sb.Capacity;
+                    long err = Win32.GetApplicationUserModelId(handle, ref length, sb);
+                    if (err == 0 && sb.ToString() == AppUserModelId)
+                    {
+                        return lastWindow;
+                    }
+                }
+            }
+            return IntPtr.Zero;
         }
 
         public String PackageFullName { get; private set; }

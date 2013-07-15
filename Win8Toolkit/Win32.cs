@@ -44,40 +44,12 @@ namespace Win8Toolkit
             [In] IntPtr itemArray, //[In] IShellItemArray itemArray,
             [Out] UInt32 processId);
     }
-    /*
-    [ComImport, Guid ( "B63EA76D-1F85-456F-A19C-48159EFA858B" ), InterfaceType ( ComInterfaceType.InterfaceIsIUnknown )]
-    interface IShellItemArray
-    {
-        // Not supported: IBindCtx
-        [MethodImpl ( MethodImplOptions.InternalCall, MethodCodeType = MethodCodeType.Runtime )]
-        void BindToHandler ( [In, MarshalAs ( UnmanagedType.Interface )] IntPtr pbc, [In] ref Guid rbhid,
-                     [In] ref Guid riid, out IntPtr ppvOut );
 
-        [MethodImpl ( MethodImplOptions.InternalCall, MethodCodeType = MethodCodeType.Runtime )]
-        void GetPropertyStore ( [In] int Flags, [In] ref Guid riid, out IntPtr ppv );
-
-        [MethodImpl ( MethodImplOptions.InternalCall, MethodCodeType = MethodCodeType.Runtime )]
-        void GetPropertyDescriptionList ( [In] ref NativeMethods.PROPERTYKEY keyType, [In] ref Guid riid, out IntPtr ppv );
-
-        [MethodImpl ( MethodImplOptions.InternalCall, MethodCodeType = MethodCodeType.Runtime )]
-        void GetAttributes ( [In] NativeMethods.SIATTRIBFLAGS dwAttribFlags, [In] uint sfgaoMask, out uint psfgaoAttribs );
-
-        [MethodImpl ( MethodImplOptions.InternalCall, MethodCodeType = MethodCodeType.Runtime )]
-        void GetCount ( out uint pdwNumItems );
-
-        [MethodImpl ( MethodImplOptions.InternalCall, MethodCodeType = MethodCodeType.Runtime )]
-        void GetItemAt ( [In] uint dwIndex, [MarshalAs ( UnmanagedType.Interface )] out IShellItem ppsi );
-
-        // Not supported: IEnumShellItems (will use GetCount and GetItemAt instead)
-        [MethodImpl ( MethodImplOptions.InternalCall, MethodCodeType = MethodCodeType.Runtime )]
-        void EnumItems ( [MarshalAs ( UnmanagedType.Interface )] out IntPtr ppenumShellItems );
-    }*/
 
     [ComImport, Guid("B1AEC16F-2383-4852-B0E9-8F0B1DC66B4D")]
     class PackageDebugSettings
     {
     }
-
 
     /*
     Renamed from Shobjidl.h:     
@@ -91,7 +63,6 @@ namespace Win8Toolkit
         PES_TERMINATED	= 4
     }
     */
-
     public enum PackageExecutionState
     {
         Unknown = 0,
@@ -142,6 +113,47 @@ namespace Win8Toolkit
     }
 
 
+    [ComImport(), Guid("7E5FE3D9-985F-4908-91F9-EE19F9FD1514")]
+    class AppVisibility
+    {
+    }
+
+    enum MONITOR_APP_VISIBILITY
+    {
+       MAV_UNKNOWN = 0,         // The mode for the monitor is unknown
+       MAV_NO_APP_VISIBLE = 1,
+       MAV_APP_VISIBLE = 2
+    };
+
+    [ComImport(), Guid("6584CE6B-7D82-49C2-89C9-C6BC02BA8C38"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IAppVisibilityEvents
+    {
+       void AppVisibilityOnMonitorChanged([In] IntPtr hMonitor,
+                                  [In] MONITOR_APP_VISIBILITY previousMode,
+                                  [In] MONITOR_APP_VISIBILITY currentMode);
+
+       void LauncherVisibilityChange([In] bool currentVisibleState);
+    }
+
+    [ComImport(), Guid("2246EA2D-CAEA-4444-A3C4-6DE827E44313"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IAppVisibility
+    {
+       void GetAppVisibilityOnMonitor([In] IntPtr hMonitor, [Out] out MONITOR_APP_VISIBILITY pMode);
+       void IsLauncherVisible([Out] out bool pfVisible);
+       void Advise([In] IAppVisibilityEvents pCallback, [Out] out UInt32 pdwCookie);
+       void Unadvise([In] UInt32 dwCookie);
+    }
+
+    internal delegate bool EnumMonitorsDelegate(IntPtr hMonitor, IntPtr hdcMonitor, ref RectStruct lprcMonitor, IntPtr dwData);
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct RectStruct
+    {
+        public int left;
+        public int top;
+        public int right;
+        public int bottom;
+    }
 
     class Win32
     {
@@ -151,14 +163,26 @@ namespace Win8Toolkit
         [DllImport("Kernel32.dll")]
         public static extern long GetApplicationUserModelId(
             [In] IntPtr hProcess,
-            [In, Out] ref int applicationUserModelIdLength, // [In, Out] ref UInt32 applicationUserModelIdLength,
-            [Out, MarshalAs(UnmanagedType.LPWStr)] System.Text.StringBuilder applicationUserModelId); // [Out, MarshalAs(UnmanagedType.LPWStr)] String applicationUserModelId);
+            [In, Out] ref int applicationUserModelIdLength,
+            [Out, MarshalAs(UnmanagedType.LPWStr)] System.Text.StringBuilder applicationUserModelId);
 
         [DllImport("user32.dll", SetLastError = true)]
         public static extern IntPtr FindWindow(
             string lpClassName, 
             string lpWindowName);
 
+        [DllImport("user32.dll", SetLastError = true)]
+        public static extern IntPtr FindWindowEx(IntPtr hwndParent, IntPtr hwndChildAfter, string lpszClass, string lpszWindow);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        public static extern IntPtr FindWindowEx(IntPtr hwndParent, IntPtr hwndChildAfter, string lpszClass, IntPtr lpszWindow);
+
+        [DllImport("user32.dll", SetLastError=true)]
+        public static extern int GetWindowThreadProcessId(IntPtr hWnd, out int lpdwProcessId);
+
+        [DllImport("user32.dll")]
+        public static extern bool EnumDisplayMonitors(IntPtr hdc, IntPtr lprcClip, EnumMonitorsDelegate lpfnEnum, IntPtr dwData);
+        
         [DllImport("user32.dll")]
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool SetForegroundWindow(IntPtr hWnd);

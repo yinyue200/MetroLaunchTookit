@@ -6,4 +6,10 @@
     <StartWorkingDirectory>C:\visual studio 2012\Projects\Win8Toolkit\Win8Toolkit\</StartWorkingDirectory>
     <StartArguments>.\Test.ps1</StartArguments>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|AnyCPU'">
+    <StartAction>Program</StartAction>
+    <StartProgram>C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe</StartProgram>
+    <StartWorkingDirectory>C:\visual studio 2012\Projects\Win8Toolkit\Win8Toolkit\</StartWorkingDirectory>
+    <StartArguments>.\Test.ps1</StartArguments>
+  </PropertyGroup>
 </Project>
