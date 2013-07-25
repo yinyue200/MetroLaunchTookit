@@ -1,12 +1,13 @@
-﻿using System;
+﻿using Microsoft.Win32;
+using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Management.Automation;
-using System.Xml.Linq;
-using Windows.Management.Deployment;
-using System.Collections.Generic;
-using Windows.ApplicationModel;
 using System.Text;
+using System.Xml.Linq;
+using Windows.ApplicationModel;
+using Windows.Management.Deployment;
 
 namespace Win8Toolkit
 {
@@ -55,13 +56,17 @@ namespace Win8Toolkit
 
             foreach (var package in packages)
             {
+                // First, try to get all the apps from the AppxManifest.xml file. This seems to be more reliable
+                // than digging through the registry.
                 String path = package.InstalledLocation.Path + @"\AppxManifest.xml";
 
                 XElement root = XDocument.Load(path).Root;
                 XNamespace xmlns = root.GetDefaultNamespace();
-                var q = from node in root.Descendants(xmlns + "Application") select node;
-                foreach (var node in q)
+                var xmlQuery = from node in root.Descendants(xmlns + "Application") select node;
+                bool hasNodes = false;
+                foreach (var node in xmlQuery)
                 {
+                    hasNodes = true;
                     XElement visualElements = node.Descendants(xmlns + "VisualElements").First();
                     WriteObject(new WindowsStoreApplication(
                         package.Id.FamilyName,
@@ -69,6 +74,39 @@ namespace Win8Toolkit
                         node.Attribute("Id").Value,
                         visualElements.Attribute("DisplayName").Value));
                 }
+
+                if (!hasNodes) {
+                    try
+                    {
+                        RegistryKey packageKey = Registry.ClassesRoot.OpenSubKey(String.Format(@"ActivatableClasses\Package\{0}\Server", package.Id.FullName));
+                        var regQuery = from subkey
+                                       in packageKey.GetSubKeyNames()
+                                       select packageKey.OpenSubKey(subkey).GetValue("AppUserModelId");
+                        foreach (String value in regQuery)
+                        {
+                            // We assume that the given AppUserModelId is of the form PackageFamilyName + "!" + Id
+                            // Double check that that's the case. We don't use Split in case the app has multiple exclamation
+                            // points in the name
+                            String familyName = package.Id.FamilyName;
+                            int familyNameIndex = value.IndexOf(familyName + "!");
+                            int familyNameLength = familyName.Length + 1;
+                            if (familyNameIndex == 0 && value.Length > familyNameLength)
+                            {
+                                String id = value.Substring(familyNameLength, value.Length - familyNameLength);
+                                WriteObject(new WindowsStoreApplication(
+                                    familyName,
+                                    package.Id.FullName,
+                                    id,
+                                    ""));
+                            }
+                        }
+                    } 
+                    catch (Exception)
+                    {
+                        // Usually a security violation. Just move on.
+                    }
+                }
+
             }
         }
     }
@@ -84,15 +122,22 @@ namespace Win8Toolkit
             String name,
             String displayName)
         {
+            InitializeInterfaces();
+
             PackageFamilyName = packageFamilyName;
             PackageFullName = packageFullName;
             Name = name;
             DisplayName = displayName;
             AppUserModelId = packageFamilyName + "!" + name;
+        }
 
-            // Note that this is not thread safe
-            aam = (IApplicationActivationManager)new ApplicationActivationManager();
-            pds = (IPackageDebugSettings)new PackageDebugSettings();
+        private void InitializeInterfaces()
+        {
+            if (aam == null || pds == null) 
+            {
+                aam = (IApplicationActivationManager)new ApplicationActivationManager();
+                pds = (IPackageDebugSettings)new PackageDebugSettings();
+            }
         }
 
         private IntPtr GetWindowForApp()

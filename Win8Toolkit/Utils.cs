@@ -15,7 +15,7 @@ namespace Win8Toolkit
                 if (psInput.BaseObject is AppxPackage)
                 {
                     var appxInput = (AppxPackage)psInput.BaseObject;
-                    return appxInput.PackageFullName;
+                    return appxInput.PackageFamilyName;
                 }
             }
 
