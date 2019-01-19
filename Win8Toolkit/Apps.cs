@@ -8,12 +8,65 @@ using System.Text;
 using System.Xml.Linq;
 using Windows.ApplicationModel;
 using Windows.Management.Deployment;
+using System.Runtime.InteropServices;
 
 namespace Win8Toolkit
 {
     [Cmdlet(VerbsCommon.Get, "WindowsStoreApps")]
     public class AppEnumerate : PSCmdlet
     {
+        public static (string FamilyName,string Id, string DisplayName) GetIdFromPackage(Package package)
+        {
+            String path = package.InstalledLocation.Path + @"\AppxManifest.xml";
+
+            XElement root = XDocument.Load(path).Root;
+            XNamespace xmlns = "http://schemas.microsoft.com/appx/manifest/foundation/windows10";
+            XNamespace xmlnsuap = "http://schemas.microsoft.com/appx/manifest/uap/windows10";
+            var xmlQuery = from node in root.Descendants(xmlns + "Application") select node;
+            bool hasNodes = false;
+            foreach (var node in xmlQuery)
+            {
+
+                XElement visualElements = node.Descendants(xmlnsuap + "VisualElements").FirstOrDefault();
+                if (visualElements != null)
+                {
+                    hasNodes = true;
+                    return (package.Id.FamilyName, node.Attribute("Id").Value,
+                        visualElements.Attribute("DisplayName").Value);
+                }
+            }
+
+            if (!hasNodes)
+            {
+                try
+                {
+                    RegistryKey packageKey = Registry.ClassesRoot.OpenSubKey(String.Format(@"ActivatableClasses\Package\{0}\Server", package.Id.FullName));
+                    var regQuery = from subkey
+                                   in packageKey.GetSubKeyNames()
+                                   select packageKey.OpenSubKey(subkey).GetValue("AppUserModelId");
+                    foreach (String value in regQuery)
+                    {
+                        // We assume that the given AppUserModelId is of the form PackageFamilyName + "!" + Id
+                        // Double check that that's the case. We don't use Split in case the app has multiple exclamation
+                        // points in the name
+                        String familyName = package.Id.FamilyName;
+                        int familyNameIndex = value.IndexOf(familyName + "!");
+                        int familyNameLength = familyName.Length + 1;
+                        if (familyNameIndex == 0 && value.Length > familyNameLength)
+                        {
+                            String id = value.Substring(familyNameLength, value.Length - familyNameLength);
+                            return (familyName, id, null);
+                        }
+                    }
+                }
+                catch
+                {
+
+                }
+            }
+            return default;
+        }
+
         private PackageManager pm = new PackageManager();
 
         [Parameter(Mandatory = false, Position = 0, ValueFromPipeline = true)]
@@ -56,57 +109,12 @@ namespace Win8Toolkit
 
             foreach (var package in packages)
             {
-                // First, try to get all the apps from the AppxManifest.xml file. This seems to be more reliable
-                // than digging through the registry.
-                String path = package.InstalledLocation.Path + @"\AppxManifest.xml";
-
-                XElement root = XDocument.Load(path).Root;
-                XNamespace xmlns = root.GetDefaultNamespace();
-                var xmlQuery = from node in root.Descendants(xmlns + "Application") select node;
-                bool hasNodes = false;
-                foreach (var node in xmlQuery)
-                {
-                    hasNodes = true;
-                    XElement visualElements = node.Descendants(xmlns + "VisualElements").First();
-                    WriteObject(new WindowsStoreApplication(
-                        package.Id.FamilyName,
+                var one = GetIdFromPackage(package);
+                WriteObject(new WindowsStoreApplication(
+                        one.FamilyName,
                         package.Id.FullName,
-                        node.Attribute("Id").Value,
-                        visualElements.Attribute("DisplayName").Value));
-                }
-
-                if (!hasNodes) {
-                    try
-                    {
-                        RegistryKey packageKey = Registry.ClassesRoot.OpenSubKey(String.Format(@"ActivatableClasses\Package\{0}\Server", package.Id.FullName));
-                        var regQuery = from subkey
-                                       in packageKey.GetSubKeyNames()
-                                       select packageKey.OpenSubKey(subkey).GetValue("AppUserModelId");
-                        foreach (String value in regQuery)
-                        {
-                            // We assume that the given AppUserModelId is of the form PackageFamilyName + "!" + Id
-                            // Double check that that's the case. We don't use Split in case the app has multiple exclamation
-                            // points in the name
-                            String familyName = package.Id.FamilyName;
-                            int familyNameIndex = value.IndexOf(familyName + "!");
-                            int familyNameLength = familyName.Length + 1;
-                            if (familyNameIndex == 0 && value.Length > familyNameLength)
-                            {
-                                String id = value.Substring(familyNameLength, value.Length - familyNameLength);
-                                WriteObject(new WindowsStoreApplication(
-                                    familyName,
-                                    package.Id.FullName,
-                                    id,
-                                    ""));
-                            }
-                        }
-                    } 
-                    catch (Exception)
-                    {
-                        // Usually a security violation. Just move on.
-                    }
-                }
-
+                        one.Id,
+                        one.DisplayName));
             }
         }
     }
@@ -145,14 +153,13 @@ namespace Win8Toolkit
             IntPtr lastWindow = IntPtr.Zero;
             while ((lastWindow = Win32.FindWindowEx(IntPtr.Zero, lastWindow, "Windows.UI.Core.CoreWindow", IntPtr.Zero)) != IntPtr.Zero)
             {
-                int pid = 1;
-                if (Win32.GetWindowThreadProcessId(lastWindow, out pid) != 0)
+                if (Win32.GetWindowThreadProcessId(lastWindow, out int pid) != 0)
                 {
                     Process p = Process.GetProcessById(pid);
                     IntPtr handle;
                     try
                     {
-                       handle = p.Handle;
+                        handle = p.Handle;
                     }
                     catch (Exception)
                     {
@@ -195,6 +202,16 @@ namespace Win8Toolkit
         {
             UInt32 pid = 0;
             aam.ActivateApplication(AppUserModelId, arguments, ACTIVATEOPTIONS.AO_NONE, out pid);
+            return pid;
+        }
+
+        public unsafe UInt32 LaunchForFile(string filepath)
+        {
+            var gd = Guid.Parse("43826d1e-e718-42ee-bc55-a1e261c37bfe");
+            Win32.SHCreateItemFromParsingName(filepath, IntPtr.Zero,gd , out var ptr);
+            Win32.SHCreateShellItemArrayFromShellItem(ptr, Guid.Parse("b63ea76d-1f85-456f-a19c-48159efa858b"), out var ppv);
+            UInt32 pid = 0;
+            aam.ActivateForFile(AppUserModelId,ppv,"",out pid);
             return pid;
         }
 

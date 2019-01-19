@@ -37,12 +37,12 @@ namespace Win8Toolkit
             [In, MarshalAs(UnmanagedType.LPWStr)] String appUserModelId,
             [In] IntPtr itemArray, //[In] IShellItemArray itemArray,
             [In, MarshalAs(UnmanagedType.LPWStr)] String verb,
-            [Out] UInt32 processId);
+            [Out] out UInt32 processId);
         // This is not supported right now
         UInt32 ActivateForProtocol(
             [In, MarshalAs(UnmanagedType.LPWStr)] String appUserModelId,
             [In] IntPtr itemArray, //[In] IShellItemArray itemArray,
-            [Out] UInt32 processId);
+            [Out] out UInt32 processId);
     }
 
 
@@ -75,9 +75,9 @@ namespace Win8Toolkit
     [StructLayout(LayoutKind.Sequential)]
     struct GUID
     {
-       public int a;
-       public short b;
-       public short c;
+       public uint a;
+       public ushort b;
+       public ushort c;
        [MarshalAs(UnmanagedType.ByValArray, SizeConst=8)]
        public byte[] d;
     }
@@ -186,5 +186,16 @@ namespace Win8Toolkit
         [DllImport("user32.dll")]
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool SetForegroundWindow(IntPtr hWnd);
+
+        [DllImport("shell32.dll")]
+        public static extern void SHCreateItemFromParsingName(
+            [In, MarshalAs(UnmanagedType.LPWStr)]string pszPath,
+            [In] IntPtr pbc, 
+            [In] [MarshalAs(UnmanagedType.LPStruct)] Guid riid,
+            [Out] out IntPtr ppv);
+        [DllImport("Shell32.dll")]
+        public static extern int SHCreateShellItemArrayFromShellItem([In]IntPtr psi, [In] [MarshalAs(UnmanagedType.LPStruct)]Guid riid, [Out] out IntPtr ppv);
     }
+
+
 }
