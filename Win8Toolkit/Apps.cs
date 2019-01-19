@@ -205,14 +205,13 @@ namespace Win8Toolkit
             return pid;
         }
 
-        public unsafe UInt32 LaunchForFile(string filepath)
+        public void LaunchForFile(string filepath)
         {
             var gd = Guid.Parse("43826d1e-e718-42ee-bc55-a1e261c37bfe");
             Win32.SHCreateItemFromParsingName(filepath, IntPtr.Zero,gd , out var ptr);
             Win32.SHCreateShellItemArrayFromShellItem(ptr, Guid.Parse("b63ea76d-1f85-456f-a19c-48159efa858b"), out var ppv);
             UInt32 pid = 0;
             aam.ActivateForFile(AppUserModelId,ppv,"",out pid);
-            return pid;
         }
 
         /// <summary>
